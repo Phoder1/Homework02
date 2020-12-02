@@ -3,12 +3,23 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using UnityEngine.Events;
+using TMPro;
+using System.Xml.Serialization;
 
 public class SavingManager : MonoBehaviour {
     public static SavingManager instance;
     private Saver saver;
-    Saver.HomeworkData homeworkData;
+    HomeworkData homeworkData;
     UnityEvent randomizePlayerEvent;
+    [SerializeField]
+    TextMeshProUGUI UItext;
+    private bool XMLmode = true;
+
+    public void ChangeMode(bool mode) {
+        XMLmode = mode;
+        LoadToScreen(SaveFile.HomeworkData, !mode);
+    }
+    
     private void Awake() {
         if (instance == null) {
             instance = this;
@@ -19,39 +30,74 @@ public class SavingManager : MonoBehaviour {
         }
 
         saver = Saver.Instance;
-
     }
     // Start is called before the first frame update
     void Start() {
-        //Testing most of the scripts, checking local save to memory as well as saving and loading to file using the Test class
-        //saver.StartTest();
-        if(randomizePlayerEvent == null) {
+        if (randomizePlayerEvent == null) {
             randomizePlayerEvent = new UnityEvent();
         }
         randomizePlayerEvent.AddListener(RandomizePlayer);
-        homeworkData = (Saver.HomeworkData)saver.GetDataInstance(SaveFile.HomeworkData);
-        Debug.Log("Homework Data on Start: " + saver.GetJson(SaveFile.HomeworkData));
+        homeworkData = (HomeworkData)saver.GetDataInstance(SaveFile.HomeworkData);
+        LoadToScreen(SaveFile.HomeworkData,false);
 
+
+
+
+
+
+        //Testing most of the scripts, checking local save to memory as well as saving and loading to file using the Test class
+        //saver.StartTest();
     }
 
-    // Update is called once per frame
-    void Update() {
-        if (Input.GetKeyDown(KeyCode.Space)) {
-            randomizePlayerEvent.Invoke();
-            Debug.Log(homeworkData.playerData.name);
-            saver.Save(SaveFile.HomeworkData);
-            Debug.Log("Homework Data after randomization: " + saver.GetJson(SaveFile.HomeworkData));
-        }
 
+    public void SaveJson(SaveFile saveFile) {
+        saver.Save(saveFile,true);
+    }
+    public void SaveJson(string saveFile) {
+        SaveJson((SaveFile)Enum.Parse(typeof(SaveFile),saveFile));
+    }
+    public void LoadJson(SaveFile saveFile) {
+        saver.Load(saveFile, true);
+        LoadToScreen(saveFile,true);
+    }
+    public void LoadJson(string saveFile) {
+        LoadJson((SaveFile)Enum.Parse(typeof(SaveFile), saveFile));
     }
 
+    public void SaveXML(SaveFile saveFile) {
+        saver.Save(saveFile, false);
+    }
+    public void SaveXML(string saveFile) {
+        SaveXML((SaveFile)Enum.Parse(typeof(SaveFile), saveFile));
+    }
+    public void LoadXML(SaveFile saveFile) {
+        saver.Load(saveFile, false);
+        LoadToScreen(saveFile, false);
+    }
+    public void LoadXML(string saveFile) {
+        LoadXML((SaveFile)Enum.Parse(typeof(SaveFile), saveFile));
+    }
+    public void StartEvent() {
+        randomizePlayerEvent.Invoke();
+    }
     private void RandomizePlayer() {
-        Debug.Log("Called event!");
         homeworkData.playerData.RandomizePlayerData();
+        LoadToScreen(SaveFile.HomeworkData,!XMLmode);
+    }
+
+    private void LoadToScreen(SaveFile saveFile, bool isJson) {
+        if (isJson) {
+            UItext.text = saver.GetJson(saveFile);
+        }
+        else {
+            UItext.text = saver.GetXML(saveFile);
+        }
+        
     }
 }
 
 public enum SaveFile { Test, HomeworkData };
+public enum SaveType { Json, XML }
 public class Saver {
     private static Saver instance;
     object WriteReadLock = new object();
@@ -63,10 +109,6 @@ public class Saver {
         buildBasePath = Application.dataPath;
         savesData.Add(SaveFile.Test, new Test());
         savesData.Add(SaveFile.HomeworkData, new HomeworkData());
-
-        foreach (SaveFile saveFile in Enum.GetValues(typeof(SaveFile))) {
-            Load(saveFile);
-        }
     }
 
 
@@ -90,36 +132,52 @@ public class Saver {
 
     private string DirectoryPath { get => buildBasePath + "/Saves/"; }
 
-    private string GetFilePath(SaveFile saveFile) { return DirectoryPath + saveFile.ToString() + ".txt"; }
+    private string GetFilePath(SaveFile saveFile, bool isJson) { return DirectoryPath + saveFile.ToString() + (isJson?"Json":"XML") + ".txt"; }
 
-    internal string GetJson(SaveFile saveFile) { return JsonUtility.ToJson(GetDataInstance(saveFile)); }
+    internal string GetJson(SaveFile saveFile) { return JsonUtility.ToJson(GetDataInstance(saveFile),true); }
 
-    private void SetFromJson(SaveFile saveFile, string json) {
+    internal string GetXML(SaveFile saveFile) {
         DataInstance instance = GetDataInstance(saveFile);
-        JsonUtility.FromJsonOverwrite(json, instance);
+        XmlSerializer xmlSerializer = new XmlSerializer(instance.GetType());
+        using (StringWriter textWriter = new StringWriter()) {
+            xmlSerializer.Serialize(textWriter, instance);
+            return textWriter.ToString();
+        }
     }
 
-    public bool FileExists(SaveFile saveFile) { return File.Exists(GetFilePath(saveFile)); }
 
-    public void Save(SaveFile saveFile) {
-        string filePath = GetFilePath(saveFile);
+    public bool FileExists(SaveFile saveFile, bool isJson) { return File.Exists(GetFilePath(saveFile, isJson)); }
+
+    public void Save(SaveFile saveFile, bool isJson) {
+        string data = (isJson ? GetJson(saveFile) : GetXML(saveFile));
+        string filePath = GetFilePath(saveFile,isJson);
         if (Directory.Exists(DirectoryPath)) {
             lock (WriteReadLock) {
-                File.WriteAllText(filePath, GetJson(saveFile));
+                File.WriteAllText(filePath, data);
             }
         }
         else {
             lock (WriteReadLock) {
                 Directory.CreateDirectory(DirectoryPath);
             }
-            Save(saveFile);
+            Save(saveFile,isJson);
         }
     }
-    public void Load(SaveFile saveFile) {
-        string filePath = GetFilePath(saveFile);
-        if (FileExists(saveFile)) {
+    public void Load(SaveFile saveFile, bool isJson) {
+        string filePath = GetFilePath(saveFile, isJson);
+        if (FileExists(saveFile, isJson)) {
             lock (WriteReadLock) {
-                SetFromJson(saveFile, File.ReadAllText(filePath));
+                if (isJson) {
+                    JsonUtility.FromJsonOverwrite(File.ReadAllText(filePath), GetDataInstance(saveFile));
+                }
+                else {
+                    using (StreamReader reader = new StreamReader(filePath)) {
+                        DataInstance instance = GetDataInstance(saveFile);
+                        XmlSerializer xmlSerializer = new XmlSerializer(instance.GetType());
+                        instance = (DataInstance)xmlSerializer.Deserialize(reader);
+                        
+                    }
+                }
             }
         }
     }
@@ -128,63 +186,59 @@ public class Saver {
         Debug.Log("TEST");
         string json = GetJson(SaveFile.Test);
         Debug.Log("Original Json: " + json);
-        SetFromJson(SaveFile.Test, json);
+        JsonUtility.FromJsonOverwrite(json, GetDataInstance(SaveFile.Test));
         json = GetJson(SaveFile.Test);
         Debug.Log("Json after local load: " + json);
-        string filePath = GetFilePath(SaveFile.Test);
+        string filePath = GetFilePath(SaveFile.Test, true);
         Debug.Log("File save path: " + filePath);
-        Load(SaveFile.Test);
-        Save(SaveFile.Test);
-        Load(SaveFile.Test);
+        Load(SaveFile.Test, true);
+        Save(SaveFile.Test,true);
+        Load(SaveFile.Test, true);
         json = GetJson(SaveFile.Test);
         Debug.Log("Json after hard load/save: " + json);
     }
+}
 
-    public class DataInstance {
-    }
+public class DataInstance {
+}
 
-    private class Test : DataInstance {
-        public int speed = 5;
-    }
+public class Test : DataInstance {
+    public int speed = 5;
+}
+[System.Xml.Serialization.XmlRoot("HomeworkData")]
+[Serializable]
+public class HomeworkData : DataInstance {
 
+    public PlayerData playerData = new PlayerData();
 
-    public class HomeworkData : DataInstance {
+    [Serializable]
+    public class PlayerData {
+        public int level;
+        public string name;
+        public Inventory inventory = new Inventory();
 
-        public PlayerData playerData = new PlayerData();
+        public void RandomizePlayerData() {
+            level = UnityEngine.Random.Range(1, 100);
+            name = nameExamples[UnityEngine.Random.Range(0, 10)];
+            inventory.item1_id = UnityEngine.Random.Range(1, 100);
+            inventory.item2_id = UnityEngine.Random.Range(1, 100);
+            inventory.item3_id = UnityEngine.Random.Range(1, 100);
+            inventory.item1_name = nameExamples[UnityEngine.Random.Range(0, 10)];
+            inventory.item2_name = nameExamples[UnityEngine.Random.Range(0, 10)];
+            inventory.item3_name = nameExamples[UnityEngine.Random.Range(0, 10)];
 
-        [Serializable]
-        public class PlayerData {
-            public int level;
-            public string name;
-            public Inventory inventory = new Inventory();
-
-            public void RandomizePlayerData() {
-                level = UnityEngine.Random.Range(1, 100);
-                name = nameExamples[UnityEngine.Random.Range(0, 10)];
-                inventory.item1_id = UnityEngine.Random.Range(1, 100);
-                inventory.item2_id = UnityEngine.Random.Range(1, 100);
-                inventory.item3_id = UnityEngine.Random.Range(1, 100);
-                inventory.item1_name = nameExamples[UnityEngine.Random.Range(0, 10)];
-                inventory.item2_name = nameExamples[UnityEngine.Random.Range(0, 10)];
-                inventory.item3_name = nameExamples[UnityEngine.Random.Range(0, 10)];
-
-            }
         }
-
-
-        [Serializable]
-        public class Inventory {
-            public int item1_id;
-            public string item1_name;
-            public int item2_id;
-            public string item2_name;
-            public int item3_id;
-            public string item3_name;
-        }
-
-
     }
-    public static string[] nameExamples = new string[10] {
+    [Serializable]
+    public class Inventory {
+        public int item1_id;
+        public string item1_name;
+        public int item2_id;
+        public string item2_name;
+        public int item3_id;
+        public string item3_name;
+    }
+    private static string[] nameExamples = new string[10] {
         "Fire Sword!",
         "Staff Of Doom!",
         "The Cape Of Luck",
@@ -196,6 +250,12 @@ public class Saver {
         "The Millennium Falcon",
         "The One Ring"
     };
+
+
 }
+
+
+
+
 
 

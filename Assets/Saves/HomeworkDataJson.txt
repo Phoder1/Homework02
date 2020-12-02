@@ -1,0 +1,14 @@
+{
+    "playerData": {
+        "level": 79,
+        "name": "The Axe Of Gimly",
+        "inventory": {
+            "item1_id": 95,
+            "item1_name": "The Cape Of Luck",
+            "item2_id": 51,
+            "item2_name": "The Millennium Falcon",
+            "item3_id": 26,
+            "item3_name": "The Cape Of Luck"
+        }
+    }
+}

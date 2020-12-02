@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-16"?>
+<HomeworkData xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <playerData>
+    <level>77</level>
+    <name>The Wizard Pointy Hat</name>
+    <inventory>
+      <item1_id>54</item1_id>
+      <item1_name>The One Ring</item1_name>
+      <item2_id>31</item2_id>
+      <item2_name>The Axe Of Gimly</item2_name>
+      <item3_id>32</item3_id>
+      <item3_name>The Eyes Of Medusa</item3_name>
+    </inventory>
+  </playerData>
+</HomeworkData>
