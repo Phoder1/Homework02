@@ -8,7 +8,7 @@ using System.Xml.Serialization;
 
 public class SavingManager : MonoBehaviour {
     public static SavingManager instance;
-    private Saver saver;
+    private SavingMediator saver;
     HomeworkData homeworkData;
     UnityEvent randomizePlayerEvent;
     [SerializeField]
@@ -29,7 +29,7 @@ public class SavingManager : MonoBehaviour {
             Destroy(gameObject);
         }
 
-        saver = Saver.Instance;
+        saver = SavingMediator.Instance;
     }
     // Start is called before the first frame update
     void Start() {
@@ -98,14 +98,14 @@ public class SavingManager : MonoBehaviour {
 
 public enum SaveFile { Test, HomeworkData };
 public enum SaveType { Json, XML }
-public class Saver {
-    private static Saver instance;
+public class SavingMediator {
+    private static SavingMediator instance;
     object WriteReadLock = new object();
 
 
     private Dictionary<SaveFile, DataInstance> savesData = new Dictionary<SaveFile, DataInstance>();
 
-    Saver() {
+    SavingMediator() {
         buildBasePath = Application.dataPath;
         savesData.Add(SaveFile.Test, new Test());
         savesData.Add(SaveFile.HomeworkData, new HomeworkData());
@@ -114,10 +114,10 @@ public class Saver {
 
     private string buildBasePath;
 
-    public static Saver Instance {
+    public static SavingMediator Instance {
         get {
             if (instance == null) {
-                instance = new Saver();
+                instance = new SavingMediator();
                 return instance;
             }
             else {
