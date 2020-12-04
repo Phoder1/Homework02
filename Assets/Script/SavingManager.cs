@@ -9,7 +9,6 @@ using System.Xml.Serialization;
 public class SavingManager : MonoBehaviour {
     public static SavingManager instance;
     private SavingMediator saver;
-    HomeworkData homeworkData;
     UnityEvent randomizePlayerEvent;
     [SerializeField]
     TextMeshProUGUI UItext;
@@ -37,7 +36,6 @@ public class SavingManager : MonoBehaviour {
             randomizePlayerEvent = new UnityEvent();
         }
         randomizePlayerEvent.AddListener(RandomizePlayer);
-        homeworkData = (HomeworkData)saver.GetDataInstance(SaveFile.HomeworkData);
         LoadToScreen(SaveFile.HomeworkData,false);
 
 
@@ -81,7 +79,8 @@ public class SavingManager : MonoBehaviour {
         randomizePlayerEvent.Invoke();
     }
     private void RandomizePlayer() {
-        homeworkData.playerData.RandomizePlayerData();
+        HomeworkData dataInstance = (HomeworkData)saver.GetDataInstance(SaveFile.HomeworkData);
+        dataInstance.playerData.RandomizePlayerData();
         LoadToScreen(SaveFile.HomeworkData,!XMLmode);
     }
 
@@ -103,12 +102,12 @@ public class SavingMediator {
     object WriteReadLock = new object();
 
 
-    private Dictionary<SaveFile, DataInstance> savesData = new Dictionary<SaveFile, DataInstance>();
+    private Dictionary<SaveFile, DataInstance> savesInstances = new Dictionary<SaveFile, DataInstance>();
 
     SavingMediator() {
         buildBasePath = Application.dataPath;
-        savesData.Add(SaveFile.Test, new Test());
-        savesData.Add(SaveFile.HomeworkData, new HomeworkData());
+        savesInstances.Add(SaveFile.Test, new Test());
+        savesInstances.Add(SaveFile.HomeworkData, new HomeworkData());
     }
 
 
@@ -128,16 +127,16 @@ public class SavingMediator {
 
 
 
-    public DataInstance GetDataInstance(SaveFile saveFile) { return savesData[saveFile]; }
+    public DataInstance GetDataInstance(SaveFile saveFile) { return savesInstances[saveFile]; }
 
     private string DirectoryPath { get => buildBasePath + "/Saves/"; }
 
     private string GetFilePath(SaveFile saveFile, bool isJson) { return DirectoryPath + saveFile.ToString() + (isJson?"Json":"XML") + ".txt"; }
 
-    internal string GetJson(SaveFile saveFile) { return JsonUtility.ToJson(GetDataInstance(saveFile),true); }
+    internal string GetJson(SaveFile saveFile) { return JsonUtility.ToJson(savesInstances[saveFile],true); }
 
     internal string GetXML(SaveFile saveFile) {
-        DataInstance instance = GetDataInstance(saveFile);
+        DataInstance instance = savesInstances[saveFile];
         XmlSerializer xmlSerializer = new XmlSerializer(instance.GetType());
         using (StringWriter textWriter = new StringWriter()) {
             xmlSerializer.Serialize(textWriter, instance);
@@ -168,14 +167,12 @@ public class SavingMediator {
         if (FileExists(saveFile, isJson)) {
             lock (WriteReadLock) {
                 if (isJson) {
-                    JsonUtility.FromJsonOverwrite(File.ReadAllText(filePath), GetDataInstance(saveFile));
+                    JsonUtility.FromJsonOverwrite(File.ReadAllText(filePath), savesInstances[saveFile]);
                 }
                 else {
                     using (StreamReader reader = new StreamReader(filePath)) {
-                        DataInstance instance = GetDataInstance(saveFile);
-                        XmlSerializer xmlSerializer = new XmlSerializer(instance.GetType());
-                        instance = (DataInstance)xmlSerializer.Deserialize(reader);
-                        
+                        XmlSerializer xmlSerializer = new XmlSerializer(savesInstances[saveFile].GetType());
+                        savesInstances[saveFile] = xmlSerializer.Deserialize(reader) as DataInstance;
                     }
                 }
             }
@@ -186,7 +183,7 @@ public class SavingMediator {
         Debug.Log("TEST");
         string json = GetJson(SaveFile.Test);
         Debug.Log("Original Json: " + json);
-        JsonUtility.FromJsonOverwrite(json, GetDataInstance(SaveFile.Test));
+        JsonUtility.FromJsonOverwrite(json, savesInstances[SaveFile.Test]);
         json = GetJson(SaveFile.Test);
         Debug.Log("Json after local load: " + json);
         string filePath = GetFilePath(SaveFile.Test, true);
